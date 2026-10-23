@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mediaboxd
 
-## Getting Started
+Rede social para registrar e avaliar **jogos, animes, mangás e livros** num só lugar, no estilo do Letterboxd.
 
-First, run the development server:
+## Funcionalidades
+
+- Catálogo unificado com dados do **IGDB** (jogos), **AniList** (animes e mangás) e **Open Library** (livros)
+- Status por obra: quero ver, em andamento, concluído, pausado, abandonado
+- Reviews com curtidas e comentários, e nota por episódio
+- Listas personalizadas, metas e ranking
+- Perfil com estatísticas, seguidores, feed de atividades e notificações
+- Moderação: denúncias de reviews, comentários e listas, com painel de admin
+- Interface em português e inglês
+- Funciona como app instalável (PWA), com página offline
+
+## Tecnologias
+
+Next.js 16 · React 19 · TypeScript · Prisma · PostgreSQL · Auth.js · Tailwind CSS · Zod · Vercel
+
+## Rodando localmente
 
 ```bash
+npm install
+cp .env.example .env      # preencha as variáveis
+npx prisma migrate dev
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Variáveis de ambiente
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Variável | Para que serve |
+|---|---|
+| `DATABASE_URL` | Conexão com o PostgreSQL |
+| `AUTH_SECRET` | Segredo do Auth.js (gere um valor aleatório) |
+| `IGDB_CLIENT_ID` / `IGDB_CLIENT_SECRET` | Busca de jogos (credenciais da Twitch) |
+| `PERSPECTIVE_API_KEY` | Opcional: moderação automática de comentários |

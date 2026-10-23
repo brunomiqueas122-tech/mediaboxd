@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MediaType {
+  GAME
+  ANIME
+  MANGA
+  BOOK
+}
+
+enum ListEntryStatus {
+  PLANNED     // quero jogar/assistir/ler
+  IN_PROGRESS // jogando/assistindo/lendo
+  COMPLETED
+  DROPPED
+  ON_HOLD
+}
+
+enum ReportTargetType {
+  REVIEW
+  COMMENT
+  LIST
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  email         String    @unique
+  passwordHash  String?
+  name          String?
+  bio           String?
+  avatarUrl     String?
+  isAdmin       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  reviews       Review[]
+  listEntries   ListEntry[]
+  lists         List[]
+  following     Follow[]  @relation("follower")
+  followers     Follow[]  @relation("following")
+  activities    Activity[]
+  notifications Notification[]
+  reviewLikes   ReviewLike[]
+  comments      Comment[]
+  listLikes     ListLike[]
+  goals         Goal[]
+  episodeRatings EpisodeRating[]
+  reports       Report[]
+}
+
+// User-submitted report against a review, comment or list. targetId is a
+// loose reference (not an FK) so one model can cover all three target types
+// without three separate nullable relations — resolved by targetType+targetId
+// lookup when an admin reviews it.
+model Report {
+  id         String           @id @default(cuid())
+  reporter   User             @relation(fields: [reporterId], references: [id])
+  reporterId String
+  targetType ReportTargetType
+  targetId   String
+  reason     String
+  status     ReportStatus     @default(PENDING)
+  createdAt  DateTime         @default(now())
+
+  @@index([status, createdAt])
+}
+
+// Per-recipient notification (e.g. "X started following you"). Kept separate
+// from Activity, which is the actor's own public timeline.
+model Notification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  type      String   // "follow" for now, extensible later
+  payload   String   // JSON blob with actor info etc.
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read, createdAt])
+}
+
+model Follow {
+  id           String   @id @default(cuid())
+  follower     User     @relation("follower", fields: [followerId], references: [id])
+  followerId   String
+  following    User     @relation("following", fields: [followingId], references: [id])
+  followingId  String
+  createdAt    DateTime @default(now())
+
+  @@unique([followerId, followingId])
+}
+
+// Unified media entity — a game, anime or book, normalized from external APIs
+// (RAWG for games, Jikan/AniList for anime, Open Library/Google Books for books)
+model MediaItem {
+  id           String    @id @default(cuid())
+  type         MediaType
+  externalId   String    // id from the source API
+  source       String    // "rawg" | "jikan" | "openlibrary" etc.
+  title        String
+  originalTitle String?
+  description  String?
+  coverUrl     String?
+  releaseYear  Int?
+  creators     String?   // director/author/studio — plain text, comma separated
+  genres       String?   // comma separated
+  metadata     String?   // raw JSON blob from the source API for extra fields
+
+  reviews      Review[]
+  listEntries  ListEntry[]
+  listItems    ListItem[]
+  episodeRatings EpisodeRating[]
+
+  createdAt    DateTime  @default(now())
+
+  @@unique([type, source, externalId])
+  @@index([type, title])
+}
+
+// Per-episode rating (anime only) — separate from Review, which rates the
+// series as a whole. episodeNumber refers to AniList's absolute episode
+// numbering, same as used by the airingSchedule endpoint.
+model EpisodeRating {
+  id            String    @id @default(cuid())
+  user          User      @relation(fields: [userId], references: [id])
+  userId        String
+  mediaItem     MediaItem @relation(fields: [mediaItemId], references: [id])
+  mediaItemId   String
+  episodeNumber Int
+  rating        Float     // 0-10, half points allowed — same scale as Review.rating
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([userId, mediaItemId, episodeNumber])
+  @@index([mediaItemId, episodeNumber])
+}
+
+model Review {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  mediaItem   MediaItem @relation(fields: [mediaItemId], references: [id])
+  mediaItemId String
+  rating      Float?    // 0-10, half points allowed
+  body        String?
+  containsSpoilers Boolean @default(false)
+  rewatch     Boolean   @default(false) // "rewatched/replayed/reread"
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  likes       ReviewLike[]
+  comments    Comment[]
+
+  @@unique([userId, mediaItemId])
+  @@index([mediaItemId])
+}
+
+model ReviewLike {
+  id        String   @id @default(cuid())
+  review    Review   @relation(fields: [reviewId], references: [id])
+  reviewId  String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([reviewId, userId])
+  @@index([reviewId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  review    Review   @relation(fields: [reviewId], references: [id])
+  reviewId  String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([reviewId, createdAt])
+}
+
+// Diary / tracking entry — one row per user+media, like Letterboxd's watch entry
+model ListEntry {
+  id          String          @id @default(cuid())
+  user        User            @relation(fields: [userId], references: [id])
+  userId      String
+  mediaItem   MediaItem       @relation(fields: [mediaItemId], references: [id])
+  mediaItemId String
+  status      ListEntryStatus @default(PLANNED)
+  progress    String?         // e.g. "ep 12/24", "pg 230/400", free text
+  finishedAt  DateTime?
+  favorite    Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([userId, mediaItemId])
+  @@index([userId, status])
+}
+
+// User-curated custom lists (e.g. "Top 10 RPGs", "Isekai I actually liked")
+model List {
+  id          String     @id @default(cuid())
+  user        User       @relation(fields: [userId], references: [id])
+  userId      String
+  name        String
+  description String?
+  isPublic    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+
+  items       ListItem[]
+  likes       ListLike[]
+}
+
+model ListLike {
+  id        String   @id @default(cuid())
+  list      List     @relation(fields: [listId], references: [id])
+  listId    String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([listId, userId])
+  @@index([listId])
+}
+
+model ListItem {
+  id          String    @id @default(cuid())
+  list        List      @relation(fields: [listId], references: [id])
+  listId      String
+  mediaItem   MediaItem @relation(fields: [mediaItemId], references: [id])
+  mediaItemId String
+  position    Int       @default(0)
+  note        String?
+
+  @@unique([listId, mediaItemId])
+}
+
+// Personal yearly goal (e.g. "finish 20 books in 2026"). type = null means
+// the goal counts completions across every media type combined.
+model Goal {
+  id          String     @id @default(cuid())
+  user        User       @relation(fields: [userId], references: [id])
+  userId      String
+  type        MediaType?
+  year        Int
+  targetCount Int
+  createdAt   DateTime   @default(now())
+
+  @@unique([userId, type, year])
+}
+
+// Feed of user actions, drives the social/activity page (works across all 3 media types)
+model Activity {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  type        String    // "review" | "rating" | "status_change" | "list_created" etc.
+  payload     String    // JSON blob describing the event
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}

@@ -36,6 +36,21 @@ yarn-error.log*
 # vercel
 .vercel
 
+# database
+/prisma/*.db
+/prisma/*.db-journal
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
+.env*
+
+# permite versionar o modelo de variáveis (sem valores reais)
+!.env.example
+
+# ferramentas locais do editor/agente
+.agents/
+.claude/
+skills-lock.json
